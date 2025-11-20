@@ -25,7 +25,15 @@ def get_imap_conn():
 def fetch_bank_emails():
     """Obtiene los últimos correos del Banco de Chile."""
     mail = get_imap_conn()
-    mail.select("INBOX")
+    
+    # Probar con INBOX primero
+    try:
+        status = mail.select("INBOX")
+        print(f"[DEBUG] Seleccionando INBOX: {status}")
+    except Exception as e:
+        print(f"[ERROR] Error seleccionando INBOX: {e}")
+        mail.logout()
+        return []
 
     # Buscar correos de ambas direcciones por separado y combinar resultados
     all_email_ids = set()
@@ -33,58 +41,138 @@ def fetch_bank_emails():
     # Buscar correos de enviodigital@bancochile.cl
     try:
         status, data = mail.search(None, "FROM", "enviodigital@bancochile.cl")
+        print(f"[DEBUG] Búsqueda enviodigital: status={status}, data={data}")
         if status == "OK" and data and data[0]:
-            email_ids_str = data[0].strip()
+            email_ids_str = data[0].decode() if isinstance(data[0], bytes) else str(data[0])
+            email_ids_str = email_ids_str.strip()
             if email_ids_str:
-                all_email_ids.update(email_ids_str.split())
+                found_ids = email_ids_str.split()
+                print(f"[DEBUG] Encontrados {len(found_ids)} correos de enviodigital@bancochile.cl")
+                all_email_ids.update(found_ids)
+            else:
+                print("[DEBUG] No se encontraron correos de enviodigital@bancochile.cl")
+        else:
+            print("[DEBUG] Búsqueda de enviodigital falló o no devolvió datos")
     except Exception as e:
-        print(f"Error buscando enviodigital: {e}")
-        pass
+        print(f"[ERROR] Error buscando enviodigital: {e}")
+        import traceback
+        traceback.print_exc()
 
     # Buscar correos de serviciodetransferencias@bancochile.cl
     try:
-        status, data = mail.search(
-            None, "FROM", "serviciodetransferencias@bancochile.cl"
-        )
+        status, data = mail.search(None, "FROM", "serviciodetransferencias@bancochile.cl")
+        print(f"[DEBUG] Búsqueda serviciodetransferencias: status={status}, data={data}")
         if status == "OK" and data and data[0]:
-            email_ids_str = data[0].strip()
+            email_ids_str = data[0].decode() if isinstance(data[0], bytes) else str(data[0])
+            email_ids_str = email_ids_str.strip()
             if email_ids_str:
-                all_email_ids.update(email_ids_str.split())
+                found_ids = email_ids_str.split()
+                print(f"[DEBUG] Encontrados {len(found_ids)} correos de serviciodetransferencias@bancochile.cl")
+                all_email_ids.update(found_ids)
+            else:
+                print("[DEBUG] No se encontraron correos de serviciodetransferencias@bancochile.cl")
+        else:
+            print("[DEBUG] Búsqueda de serviciodetransferencias falló o no devolvió datos")
     except Exception as e:
-        print(f"Error buscando serviciodetransferencias: {e}")
-        pass
+        print(f"[ERROR] Error buscando serviciodetransferencias: {e}")
+        import traceback
+        traceback.print_exc()
+
+    print(f"[DEBUG] Total de IDs de correos encontrados: {len(all_email_ids)}")
 
     if not all_email_ids:
+        print("[DEBUG] No se encontraron correos. Verificando si hay correos en el INBOX...")
+        try:
+            # Intentar buscar todos los correos recientes para debug
+            status, data = mail.search(None, "ALL")
+            if status == "OK" and data and data[0]:
+                all_ids = data[0].decode() if isinstance(data[0], bytes) else str(data[0])
+                all_ids = all_ids.strip()
+                total = len(all_ids.split()) if all_ids else 0
+                print(f"[DEBUG] Total de correos en INBOX: {total}")
+        except Exception as e:
+            print(f"[ERROR] Error contando correos: {e}")
+        
         mail.logout()
         return []
 
     # Ordenar y tomar los últimos 30
-    email_ids = sorted(list(all_email_ids), key=lambda x: int(x))[-30:]
+    try:
+        email_ids = sorted(list(all_email_ids), key=lambda x: int(x.decode() if isinstance(x, bytes) else x))[-30:]
+    except Exception as e:
+        print(f"[ERROR] Error ordenando IDs: {e}")
+        email_ids = list(all_email_ids)[-30:]
+    
+    print(f"[DEBUG] Procesando {len(email_ids)} correos (últimos 30 de {len(all_email_ids)} encontrados)")
     messages = []
-    for eid in email_ids:
-        status, msg_data = mail.fetch(eid, "(RFC822)")
-        if status != "OK":
+    for i, eid in enumerate(email_ids):
+        try:
+            eid_str = eid.decode() if isinstance(eid, bytes) else str(eid)
+            status, msg_data = mail.fetch(eid_str.encode() if isinstance(eid_str, str) else eid_str, "(RFC822)")
+            if status != "OK":
+                print(f"[DEBUG] Error fetch correo {i+1} (ID: {eid_str}): status={status}")
+                continue
+            msg = email.message_from_bytes(msg_data[0][1])
+            
+            # Log del asunto para debugging
+            subject = msg.get("Subject", "Sin asunto")
+            from_addr = msg.get("From", "Sin remitente")
+            print(f"[DEBUG] Correo {i+1}: From={from_addr[:50]}, Subject={subject[:50]}")
+            
+        except Exception as e:
+            print(f"[ERROR] Error procesando correo {i+1} (ID: {eid}): {e}")
+            import traceback
+            traceback.print_exc()
             continue
-        msg = email.message_from_bytes(msg_data[0][1])
 
         if msg.is_multipart():
             body = ""
+            html_body = ""
             for part in msg.walk():
-                if part.get_content_type() == "text/plain":
-                    body += part.get_payload(decode=True).decode(
-                        "utf-8", errors="ignore"
-                    )
+                content_type = part.get_content_type()
+                if content_type == "text/plain":
+                    try:
+                        payload = part.get_payload(decode=True)
+                        if payload:
+                            body += payload.decode("utf-8", errors="ignore")
+                    except Exception as e:
+                        print(f"[DEBUG] Error decodificando text/plain: {e}")
+                elif content_type == "text/html":
+                    try:
+                        payload = part.get_payload(decode=True)
+                        if payload:
+                            html_body += payload.decode("utf-8", errors="ignore")
+                    except Exception as e:
+                        print(f"[DEBUG] Error decodificando text/html: {e}")
+            
+            # Si no hay texto plano, usar HTML
+            if not body and html_body:
+                # Intentar extraer texto del HTML (básico)
+                import re as re_module
+                body = re_module.sub(r'<[^>]+>', ' ', html_body)
+                body = re_module.sub(r'\s+', ' ', body)
+            
+            if body:
+                messages.append(body)
+            else:
+                print(f"[DEBUG] Correo {i+1}: No se pudo extraer contenido")
         else:
-            body = msg.get_payload(decode=True).decode("utf-8", errors="ignore")
-
-        messages.append(body)
+            try:
+                body = msg.get_payload(decode=True)
+                if body:
+                    body = body.decode("utf-8", errors="ignore")
+                    messages.append(body)
+                else:
+                    print(f"[DEBUG] Correo {i+1}: Payload vacío")
+            except Exception as e:
+                print(f"[DEBUG] Error decodificando correo simple: {e}")
 
     mail.logout()
     return messages
 
 
 def parse_purchase(body: str):
-    # Patrón más flexible para compras
+    # Patrones más flexibles para compras/cargos
     patterns = [
         # Patrón original
         re.compile(
@@ -96,40 +184,71 @@ def parse_purchase(body: str):
             r"compra por \$([\d\.]+)\s+con cargo a Cuenta\s+(\d+)\s+en (.+?) el (\d{2}/\d{2}/\d{4}) (\d{2}:\d{2})",
             re.IGNORECASE | re.DOTALL,
         ),
+        # Cargo en Cuenta - formato común
+        re.compile(
+            r"cargo.*?cuenta.*?\$([\d\.]+).*?en (.+?)(?: el| fecha|,)\s*(\d{2}/\d{2}/\d{4})(?:\s+(\d{2}:\d{2}))?",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        # Variación con "Cargo en Cuenta" en el título
+        re.compile(
+            r"(?:cargo|compra).*?\$([\d\.]+).*?(?:en|en|de)\s+(.+?)(?:\s+el|\s+fecha|,)\s*(\d{2}/\d{2}/\d{4})(?:\s+(\d{2}:\d{2}))?",
+            re.IGNORECASE | re.DOTALL,
+        ),
         # Variación más flexible
         re.compile(
             r"compra.*?\$([\d\.]+).*?en (.+?) el (\d{2}/\d{2}/\d{4}) (\d{2}:\d{2})",
             re.IGNORECASE | re.DOTALL,
         ),
+        # Buscar cualquier monto seguido de fecha
+        re.compile(
+            r"\$([\d\.]+).*?(?:cargo|compra|pago).*?(\d{2}/\d{2}/\d{4})(?:\s+(\d{2}:\d{2}))?",
+            re.IGNORECASE | re.DOTALL,
+        ),
     ]
 
-    for pattern in patterns:
+    for pattern_num, pattern in enumerate(patterns):
         m = pattern.search(body)
         if m:
             try:
                 groups = m.groups()
-                if len(groups) == 5:
-                    amount_str, last_digits, merchant, date_str, time_str = groups
-                elif len(groups) == 4:
-                    amount_str, merchant, date_str, time_str = groups
-                else:
-                    continue
+                print(f"[DEBUG] Patrón {pattern_num + 1} coincidió, grupos: {len(groups)}")
+                
+                if len(groups) >= 3:
+                    # Extraer monto
+                    amount_str = groups[0].replace(".", "").replace(",", "").strip()
+                    amount = int(amount_str)
+                    
+                    # Extraer descripción
+                    if len(groups) >= 4:
+                        merchant = groups[1].strip()
+                        date_str = groups[2]
+                        time_str = groups[3] if len(groups) > 3 and groups[3] else "00:00"
+                    elif len(groups) == 3:
+                        # Formato: monto, fecha, hora opcional
+                        merchant = "Compra"  # Descripción por defecto
+                        date_str = groups[1] if '/' in groups[1] else groups[2]
+                        time_str = groups[2] if ':' in str(groups[2]) else "00:00"
+                    else:
+                        continue
+                    
+                    # Limpiar descripción (tomar primeros 100 caracteres)
+                    merchant = merchant[:100].strip() if merchant else "Compra"
+                    
+                    # Parsear fecha y hora
+                    if time_str and ':' in str(time_str):
+                        dt = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M")
+                    else:
+                        dt = datetime.strptime(f"{date_str}", "%d/%m/%Y")
 
-                # Limpiar y convertir monto
-                amount_str = amount_str.replace(".", "").replace(",", "").strip()
-                amount = int(amount_str)
-
-                # Parsear fecha y hora
-                dt = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M")
-
-                return dict(
-                    type="purchase",
-                    amount=amount,
-                    description=merchant.strip(),
-                    date_time=dt,
-                )
-            except (ValueError, IndexError) as e:
-                print(f"[DEBUG] Error parseando compra: {e}")
+                    print(f"[DEBUG] Compra parseada: ${amount} CLP en {merchant} el {dt}")
+                    return dict(
+                        type="purchase",
+                        amount=amount,
+                        description=merchant,
+                        date_time=dt,
+                    )
+            except (ValueError, IndexError, AttributeError) as e:
+                print(f"[DEBUG] Error parseando compra con patrón {pattern_num + 1}: {e}")
                 continue
 
     return None
@@ -138,9 +257,11 @@ def parse_purchase(body: str):
 def parse_transfer(body: str):
     # Patrones más flexibles para transferencias
     patterns = [
-        re.compile(r"Monto\s+\$([\d\.]+)", re.IGNORECASE),
+        re.compile(r"monto\s+\$([\d\.]+)", re.IGNORECASE),
+        re.compile(r"transferencia.*?a\s+terceros.*?\$([\d\.]+)", re.IGNORECASE | re.DOTALL),
         re.compile(r"transferencia.*?\$([\d\.]+)", re.IGNORECASE | re.DOTALL),
-        re.compile(r"monto.*?(\d+\.?\d*)", re.IGNORECASE),
+        re.compile(r"\$([\d\.]+).*?transferencia", re.IGNORECASE | re.DOTALL),
+        re.compile(r"monto.*?(\d+[\.\d]*)", re.IGNORECASE),
     ]
 
     amount = None
