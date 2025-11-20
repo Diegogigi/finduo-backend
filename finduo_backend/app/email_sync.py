@@ -12,11 +12,11 @@ from .models import Transaction, User
 # Configurar logging para que se vea en Railway
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),  # Asegurar que va a stdout
         logging.StreamHandler(sys.stderr),  # También a stderr por si acaso
-    ]
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -36,67 +36,84 @@ def get_imap_conn():
 
 
 def fetch_bank_emails():
-    """Obtiene los últimos correos del Banco de Chile."""
+    """Obtiene los últimos correos del Banco de Chile desde INBOX y etiquetas."""
     mail = get_imap_conn()
 
-    # Probar con INBOX primero
-    try:
-        status = mail.select("INBOX")
-        logger.info(f"Seleccionando INBOX: {status}")
-    except Exception as e:
-        logger.error(f"Error seleccionando INBOX: {e}", exc_info=True)
-        mail.logout()
-        return []
-
-    # Buscar correos de ambas direcciones por separado y combinar resultados
+    # Lista de ubicaciones donde buscar (INBOX + etiquetas de Gmail)
+    locations = ["INBOX", "INBOX/Compras", "INBOX/Bancos"]
+    
+    # Buscar correos de ambas direcciones en todas las ubicaciones
     all_email_ids = set()
 
-    # Buscar correos de enviodigital@bancochile.cl
-    try:
-        status, data = mail.search(None, "FROM", "enviodigital@bancochile.cl")
-        logger.info(f"Búsqueda enviodigital: status={status}, data={data}")
-        if status == "OK" and data and data[0]:
-            email_ids_str = (
-                data[0].decode() if isinstance(data[0], bytes) else str(data[0])
-            )
-            email_ids_str = email_ids_str.strip()
-            if email_ids_str:
-                found_ids = email_ids_str.split()
-                logger.info(f"Encontrados {len(found_ids)} correos de enviodigital@bancochile.cl")
-                all_email_ids.update(found_ids)
-            else:
-                logger.warning("No se encontraron correos de enviodigital@bancochile.cl")
-        else:
-            logger.warning("Búsqueda de enviodigital falló o no devolvió datos")
-    except Exception as e:
-        logger.error(f"Error buscando enviodigital: {e}", exc_info=True)
+    # Buscar en cada ubicación
+    for location in locations:
+        try:
+            # Intentar seleccionar la ubicación
+            try:
+                status = mail.select(location)
+                logger.info(f"Seleccionando {location}: {status}")
+            except Exception as e:
+                # Si falla, intentar con formato alternativo
+                try:
+                    alt_location = location.replace("INBOX/", "")
+                    status = mail.select(f'"[Gmail]/{alt_location}"')
+                    logger.info(f"Seleccionando [Gmail]/{alt_location}: {status}")
+                except Exception:
+                    logger.warning(f"No se pudo acceder a {location}, saltando...")
+                    continue
 
-    # Buscar correos de serviciodetransferencias@bancochile.cl
-    try:
-        status, data = mail.search(
-            None, "FROM", "serviciodetransferencias@bancochile.cl"
-        )
-        logger.info(f"Búsqueda serviciodetransferencias: status={status}, data={data}")
-        if status == "OK" and data and data[0]:
-            email_ids_str = (
-                data[0].decode() if isinstance(data[0], bytes) else str(data[0])
-            )
-            email_ids_str = email_ids_str.strip()
-            if email_ids_str:
-                found_ids = email_ids_str.split()
-                logger.info(f"Encontrados {len(found_ids)} correos de serviciodetransferencias@bancochile.cl")
-                all_email_ids.update(found_ids)
-            else:
-                logger.warning("No se encontraron correos de serviciodetransferencias@bancochile.cl")
-        else:
-            logger.warning("Búsqueda de serviciodetransferencias falló o no devolvió datos")
-    except Exception as e:
-        logger.error(f"Error buscando serviciodetransferencias: {e}", exc_info=True)
+            # Buscar correos de enviodigital@bancochile.cl
+            try:
+                status, data = mail.search(None, "FROM", "enviodigital@bancochile.cl")
+                logger.info(f"Búsqueda enviodigital en {location}: status={status}")
+                if status == "OK" and data and data[0]:
+                    email_ids_str = (
+                        data[0].decode() if isinstance(data[0], bytes) else str(data[0])
+                    )
+                    email_ids_str = email_ids_str.strip()
+                    if email_ids_str:
+                        found_ids = email_ids_str.split()
+                        logger.info(
+                            f"Encontrados {len(found_ids)} correos de enviodigital@bancochile.cl en {location}"
+                        )
+                        all_email_ids.update(found_ids)
+                else:
+                    logger.debug(f"No se encontraron correos de enviodigital en {location}")
+            except Exception as e:
+                logger.warning(f"Error buscando enviodigital en {location}: {e}")
+
+            # Buscar correos de serviciodetransferencias@bancochile.cl
+            try:
+                status, data = mail.search(
+                    None, "FROM", "serviciodetransferencias@bancochile.cl"
+                )
+                logger.info(f"Búsqueda serviciodetransferencias en {location}: status={status}")
+                if status == "OK" and data and data[0]:
+                    email_ids_str = (
+                        data[0].decode() if isinstance(data[0], bytes) else str(data[0])
+                    )
+                    email_ids_str = email_ids_str.strip()
+                    if email_ids_str:
+                        found_ids = email_ids_str.split()
+                        logger.info(
+                            f"Encontrados {len(found_ids)} correos de serviciodetransferencias@bancochile.cl en {location}"
+                        )
+                        all_email_ids.update(found_ids)
+                else:
+                    logger.debug(f"No se encontraron correos de serviciodetransferencias en {location}")
+            except Exception as e:
+                logger.warning(f"Error buscando serviciodetransferencias en {location}: {e}")
+
+        except Exception as e:
+            logger.warning(f"Error procesando ubicación {location}: {e}")
+            continue
 
     logger.info(f"Total de IDs de correos encontrados: {len(all_email_ids)}")
 
     if not all_email_ids:
-        logger.warning("No se encontraron correos. Verificando si hay correos en el INBOX...")
+        logger.warning(
+            "No se encontraron correos. Verificando si hay correos en el INBOX..."
+        )
         try:
             # Intentar buscar todos los correos recientes para debug
             status, data = mail.search(None, "ALL")
@@ -113,6 +130,11 @@ def fetch_bank_emails():
         mail.logout()
         return []
 
+    # Cerrar conexión actual y abrir una nueva para leer los correos desde INBOX
+    mail.logout()
+    mail = get_imap_conn()
+    mail.select("INBOX")  # Seleccionar INBOX para leer los correos
+
     # Ordenar y tomar los últimos 30
     try:
         email_ids = sorted(
@@ -123,16 +145,18 @@ def fetch_bank_emails():
         logger.error(f"Error ordenando IDs: {e}", exc_info=True)
         email_ids = list(all_email_ids)[-30:]
 
-    logger.info(f"Procesando {len(email_ids)} correos (últimos 30 de {len(all_email_ids)} encontrados)")
+    logger.info(
+        f"Procesando {len(email_ids)} correos (últimos 30 de {len(all_email_ids)} encontrados)"
+    )
     messages = []
     for i, eid in enumerate(email_ids):
         try:
             eid_str = eid.decode() if isinstance(eid, bytes) else str(eid)
-            status, msg_data = mail.fetch(
-                eid_str.encode() if isinstance(eid_str, str) else eid_str, "(RFC822)"
-            )
+            status, msg_data = mail.fetch(eid_str, "(RFC822)")
             if status != "OK":
-                logger.warning(f"Error fetch correo {i+1} (ID: {eid_str}): status={status}")
+                logger.warning(
+                    f"Error fetch correo {i+1} (ID: {eid_str}): status={status}"
+                )
                 continue
             msg = email.message_from_bytes(msg_data[0][1])
 
@@ -142,7 +166,9 @@ def fetch_bank_emails():
             logger.info(f"Correo {i+1}: From={from_addr[:50]}, Subject={subject[:50]}")
 
         except Exception as e:
-            logger.error(f"Error procesando correo {i+1} (ID: {eid}): {e}", exc_info=True)
+            logger.error(
+                f"Error procesando correo {i+1} (ID: {eid}): {e}", exc_info=True
+            )
             continue
 
         if msg.is_multipart():
@@ -232,7 +258,9 @@ def parse_purchase(body: str):
         if m:
             try:
                 groups = m.groups()
-                logger.debug(f"Patrón {pattern_num + 1} coincidió, grupos: {len(groups)}")
+                logger.debug(
+                    f"Patrón {pattern_num + 1} coincidió, grupos: {len(groups)}"
+                )
 
                 if len(groups) >= 3:
                     # Extraer monto
@@ -273,7 +301,9 @@ def parse_purchase(body: str):
                         date_time=dt,
                     )
             except (ValueError, IndexError, AttributeError) as e:
-                logger.debug(f"Error parseando compra con patrón {pattern_num + 1}: {e}")
+                logger.debug(
+                    f"Error parseando compra con patrón {pattern_num + 1}: {e}"
+                )
                 continue
 
     return None
@@ -362,7 +392,9 @@ def sync_emails_to_db(user_email: str):
             if not info:
                 # Mostrar un preview del correo para debugging
                 preview = body[:200].replace("\n", " ").strip()
-                logger.warning(f"Correo {i+1}: No se pudo parsear (no coincide con patrones)")
+                logger.warning(
+                    f"Correo {i+1}: No se pudo parsear (no coincide con patrones)"
+                )
                 logger.debug(f"Preview: {preview}...")
                 continue
 
@@ -380,7 +412,9 @@ def sync_emails_to_db(user_email: str):
             )
 
             if existing:
-                logger.info(f"Correo {i+1}: Transacción duplicada - {info['type']} ${info['amount']} CLP en {info['date_time']}")
+                logger.info(
+                    f"Correo {i+1}: Transacción duplicada - {info['type']} ${info['amount']} CLP en {info['date_time']}"
+                )
                 skipped += 1
                 continue
 
@@ -393,7 +427,9 @@ def sync_emails_to_db(user_email: str):
             )
             db.add(tx)
             count += 1
-            logger.info(f"Correo {i+1}: Transacción creada - {info['type']} ${info['amount']} CLP en {info['date_time']}")
+            logger.info(
+                f"Correo {i+1}: Transacción creada - {info['type']} ${info['amount']} CLP en {info['date_time']}"
+            )
         except Exception as e:
             logger.error(f"Correo {i+1}: Error al procesar - {str(e)}", exc_info=True)
             errors += 1
