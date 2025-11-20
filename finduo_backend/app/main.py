@@ -48,6 +48,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    password: str
 
 
 class TokenResponse(BaseModel):
