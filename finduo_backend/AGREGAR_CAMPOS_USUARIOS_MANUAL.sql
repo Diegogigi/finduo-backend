@@ -8,7 +8,8 @@
 -- ============================================
 -- Este campo almacena el hash de la contraseña del usuario
 -- Es nullable porque puede haber usuarios existentes sin contraseña
-ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR;
+-- En PostgreSQL, TEXT es equivalente a VARCHAR
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 
 -- Verificar que se agregó correctamente
 -- SELECT column_name, data_type, is_nullable 

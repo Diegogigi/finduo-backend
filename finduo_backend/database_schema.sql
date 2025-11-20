@@ -16,9 +16,9 @@
 -- ============================================
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
-    email VARCHAR UNIQUE NOT NULL,
-    name VARCHAR NOT NULL,
-    password_hash VARCHAR,  -- Nullable para compatibilidad con usuarios existentes
+    email TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    password_hash TEXT,  -- Nullable para compatibilidad con usuarios existentes
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
