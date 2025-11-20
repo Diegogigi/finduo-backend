@@ -54,13 +54,14 @@ Query OK, 0 rows affected
 #### **Comando 2: Agregar campo created_at**
 
 ```sql
-ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT CURRENT_TIMESTAMP;
 ```
 
 **¿Qué hace?**
 
-- Agrega la columna `created_at` de tipo TIMESTAMP
+- Agrega la columna `created_at` de tipo timestamp (fecha y hora)
 - `DEFAULT CURRENT_TIMESTAMP` establece la fecha actual por defecto para nuevos usuarios
+- En PostgreSQL, `timestamp` (minúsculas) es el tipo estándar para fecha y hora
 
 **Resultado esperado:**
 
