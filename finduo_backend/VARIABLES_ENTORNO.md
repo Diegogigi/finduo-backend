@@ -36,7 +36,18 @@
 
 ## 📝 Variables Opcionales
 
-### `PORT` (Automática en Railway)
+### 4. `SECRET_KEY` ⚠️ **RECOMENDADA** (Para autenticación JWT)
+
+- **Descripción**: Clave secreta para firmar tokens JWT
+- **Ejemplo**: `mi-clave-secreta-super-segura-123456`
+- **Uso**: Se usa para generar y verificar tokens JWT en el sistema de autenticación
+- **⚠️ Importante**:
+  - Si no está configurada, usa el valor por defecto (no recomendado para producción)
+  - Debe ser una cadena aleatoria y segura
+  - Puedes usar cualquier string largo y aleatorio
+- **Cómo configurarla**: Railway → Servicio backend → Variables → Agregar `SECRET_KEY`
+
+### 5. `PORT` (Automática en Railway)
 
 - **Descripción**: Puerto donde corre la aplicación
 - **Ejemplo**: `8080`
@@ -50,17 +61,19 @@
 3. Click en el servicio **`finduo-backend`**
 4. Ve a la pestaña **"Variables"**
 5. Verifica que estén configuradas:
-   - ✅ `EMAIL_USER`
-   - ✅ `EMAIL_PASSWORD`
-   - ✅ `DATABASE_URL` (si usas PostgreSQL)
+   - ✅ `DATABASE_URL` (OBLIGATORIA - debe estar configurada con la URL del PostgreSQL)
+   - ✅ `SECRET_KEY` (Recomendada - para autenticación JWT)
+   - ⚠️ `EMAIL_USER` (Solo si usas sincronización de correos)
+   - ⚠️ `EMAIL_PASSWORD` (Solo si usas sincronización de correos)
 
 ## ✅ Checklist de Configuración
 
-- [ ] `EMAIL_USER` configurada con tu correo de Gmail
-- [ ] `EMAIL_PASSWORD` configurada con App Password de Gmail (16 caracteres)
-- [ ] `DATABASE_URL` configurada automáticamente (si usas PostgreSQL de Railway)
-- [ ] Verificación en 2 pasos activada en Gmail
-- [ ] App Password creada en Gmail
+- [ ] `DATABASE_URL` configurada con la URL del PostgreSQL (OBLIGATORIA)
+- [ ] `SECRET_KEY` configurada (Recomendada para producción)
+- [ ] `EMAIL_USER` configurada con tu correo de Gmail (Solo si usas correos)
+- [ ] `EMAIL_PASSWORD` configurada con App Password de Gmail (Solo si usas correos)
+- [ ] Verificación en 2 pasos activada en Gmail (Solo si usas correos)
+- [ ] App Password creada en Gmail (Solo si usas correos)
 
 ## 🚨 Problemas Comunes
 
