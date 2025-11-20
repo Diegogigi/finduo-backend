@@ -51,19 +51,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _syncData() async {
     if (!mounted) return;
     
-    // Mostrar mensaje de inicio
+    // Mostrar mensaje de inicio con indicador de carga
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Sincronización iniciada...'),
-        duration: Duration(seconds: 2),
+        content: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+            SizedBox(width: 12),
+            Text('Sincronizando correo...'),
+          ],
+        ),
+        duration: Duration(seconds: 60),
       ),
     );
 
     try {
+      print('Iniciando sincronización...');
       // Sincronizar en modo individual (puedes cambiarlo según necesites)
       await _transactionService.syncEmail(mode: 'individual');
       
       if (!mounted) return;
+      
+      // Cerrar el SnackBar anterior
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       
       // Mostrar mensaje de éxito
       ScaffoldMessenger.of(context).showSnackBar(
@@ -73,15 +90,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
           duration: Duration(seconds: 3),
         ),
       );
+      
+      print('Sincronización completada exitosamente');
     } catch (e) {
+      print('Error en _syncData: $e');
+      
       if (!mounted) return;
       
-      // Mostrar mensaje de error
+      // Cerrar el SnackBar anterior
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      
+      // Mostrar mensaje de error con más detalles
+      String errorMessage = 'Error al sincronizar';
+      if (e.toString().contains('Timeout')) {
+        errorMessage = 'La sincronización está tomando demasiado tiempo. Intenta de nuevo.';
+      } else if (e.toString().contains('Failed host lookup') || e.toString().contains('SocketException')) {
+        errorMessage = 'No se pudo conectar al servidor. Verifica tu conexión a internet.';
+      } else {
+        errorMessage = 'Error: ${e.toString()}';
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error al sincronizar: $e'),
+          content: Text(errorMessage),
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
+          duration: const Duration(seconds: 5),
         ),
       );
     }
