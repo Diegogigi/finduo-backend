@@ -105,9 +105,10 @@ def create_duo_invite():
         db.query(DuoMembership).filter(DuoMembership.user_id == user.id).first()
     )
     if membership:
-        room = db.query(DuoRoom).get(membership.room_id)
-        db.close()
-        return {"invite_code": room.invite_code}
+        room = db.query(DuoRoom).filter(DuoRoom.id == membership.room_id).first()
+        if room:
+            db.close()
+            return {"invite_code": room.invite_code}
 
     code = secrets.token_urlsafe(8)
     room = DuoRoom(invite_code=code)
@@ -167,15 +168,71 @@ def me():
     )
     duo = None
     if membership:
-        room = db.query(DuoRoom).get(membership.room_id)
-        duo = {
-            "room_id": room.id,
-            "invite_code": room.invite_code,
-            "role": membership.role.value,
-        }
+        room = db.query(DuoRoom).filter(DuoRoom.id == membership.room_id).first()
+        if room:
+            duo = {
+                "room_id": room.id,
+                "invite_code": room.invite_code,
+                "role": membership.role.value,
+            }
     db.close()
     return {
         "name": user.name,
         "email": user.email,
         "duo": duo,
     }
+
+
+class TransactionCreate(BaseModel):
+    type: str
+    description: str
+    amount: int
+    date_time: str
+    mode: str = "individual"
+
+
+@app.post("/transactions")
+def create_transaction(tx: TransactionCreate):
+    db = SessionLocal()
+    user = get_current_user(db)
+    
+    from datetime import datetime
+    date_time = datetime.fromisoformat(tx.date_time.replace('Z', '+00:00'))
+    
+    transaction = Transaction(
+        user_id=user.id,
+        type=tx.type,
+        description=tx.description,
+        amount=tx.amount,
+        currency="CLP",
+        date_time=date_time,
+    )
+    
+    # Si es modo duo, agregar al room
+    if tx.mode == "duo":
+        membership = (
+            db.query(DuoMembership)
+            .filter(
+                DuoMembership.user_id == user.id,
+                DuoMembership.status == DuoStatus.active,
+            )
+            .first()
+        )
+        if membership:
+            transaction.duo_room_id = membership.room_id
+    
+    db.add(transaction)
+    db.commit()
+    db.refresh(transaction)
+    
+    result = {
+        "id": transaction.id,
+        "type": transaction.type,
+        "description": transaction.description,
+        "amount": transaction.amount,
+        "currency": transaction.currency,
+        "date_time": transaction.date_time.isoformat(),
+    }
+    
+    db.close()
+    return result

@@ -18,6 +18,54 @@ class TransactionService {
     }
   }
 
+  Future<Map<String, dynamic>> createTransaction({
+    required String type,
+    required String description,
+    required int amount,
+    required DateTime dateTime,
+    required String mode,
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConfig.baseUrl}/transactions');
+      print('Creando transacción: $url');
+      
+      final body = jsonEncode({
+        'type': type,
+        'description': description,
+        'amount': amount,
+        'date_time': dateTime.toUtc().toIso8601String(),
+        'mode': mode,
+      });
+      
+      print('Body: $body');
+      
+      final resp = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Timeout: La operación está tomando demasiado tiempo');
+        },
+      );
+      
+      print('Respuesta del servidor: ${resp.statusCode}');
+      print('Body: ${resp.body}');
+      
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        print('Transacción creada exitosamente: ${data['id']}');
+        return data;
+      } else {
+        throw Exception('Error al crear transacción (${resp.statusCode}): ${resp.body}');
+      }
+    } catch (e) {
+      print('Error en createTransaction: $e');
+      rethrow;
+    }
+  }
+
   Future<int> syncEmail({required String mode}) async {
     try {
       final url = Uri.parse('${ApiConfig.baseUrl}/sync-email');

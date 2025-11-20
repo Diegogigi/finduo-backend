@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../services/transaction_service.dart';
 import 'invite_partner_screen.dart';
+import 'add_expense_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -355,10 +356,18 @@ class _HomeScreenState extends State<HomeScreen> {
         _quickAction(
           icon: Icons.add_circle_outline_rounded,
           label: 'Agregar gasto',
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Funcionalidad próximamente disponible')),
+          onTap: () async {
+            final result = await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => AddExpenseScreen(
+                  isDuoMode: _isDuoMode,
+                ),
+              ),
             );
+            // Si se agregó un gasto, recargar las transacciones
+            if (result == true) {
+              _loadTransactions();
+            }
           },
         ),
         _quickAction(
