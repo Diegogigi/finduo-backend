@@ -392,8 +392,15 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: Icons.pie_chart_outline_rounded,
           label: 'Ver resumen',
           onTap: () {
+            // Cambiar a la pestaña de Resumen (índice 2)
+            final navigationState = Navigator.of(context);
+            // Si estamos en MainNavigation, cambiar de pestaña
+            // Por ahora, solo mostramos un mensaje para ir a la pestaña
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Ve a la pestaña "Resumen" para ver estadísticas')),
+              const SnackBar(
+                content: Text('Ve a la pestaña "Resumen" para ver estadísticas completas'),
+                duration: Duration(seconds: 2),
+              ),
             );
           },
         ),
