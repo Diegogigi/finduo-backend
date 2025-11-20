@@ -13,6 +13,7 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     name = Column(String)
     password_hash = Column(String, nullable=True)  # Nullable para compatibilidad con usuarios existentes
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     transactions = relationship("Transaction", back_populates="user")
     duo_memberships = relationship("DuoMembership", back_populates="user")
