@@ -36,12 +36,12 @@ Copia y pega **cada comando uno por uno** y ejecútalo:
 #### **Comando 1: Agregar campo password_hash**
 
 ```sql
-ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 ```
 
 **¿Qué hace?**
 
-- Agrega la columna `password_hash` de tipo VARCHAR
+- Agrega la columna `password_hash` de tipo TEXT (equivalente a VARCHAR en PostgreSQL)
 - `IF NOT EXISTS` evita errores si la columna ya existe
 - Es nullable (puede ser NULL) porque hay usuarios existentes sin contraseña
 
