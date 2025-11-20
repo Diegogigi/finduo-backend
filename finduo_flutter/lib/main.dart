@@ -4,8 +4,11 @@ import 'screens/home_screen.dart';
 import 'screens/transactions_screen.dart';
 import 'screens/insights_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/login_screen.dart';
+import 'services/auth_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const FinDuoApp());
 }
 
@@ -36,8 +39,52 @@ class FinDuoApp extends StatelessWidget {
         Locale('en', 'US'), // Inglés (fallback)
       ],
       locale: const Locale('es', 'ES'),
-      home: const MainNavigation(),
+      home: const AuthWrapper(),
     );
+  }
+}
+
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  final _authService = AuthService();
+  bool _isLoading = true;
+  bool _isAuthenticated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    final isAuth = await _authService.isAuthenticated();
+    setState(() {
+      _isAuthenticated = isAuth;
+      _isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (!_isAuthenticated) {
+      return const LoginScreen();
+    }
+
+    return const MainNavigation();
   }
 }
 

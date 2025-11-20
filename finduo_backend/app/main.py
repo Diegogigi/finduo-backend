@@ -1,5 +1,8 @@
-from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Query, Depends, status
+from fastapi.security import HTTPAuthorizationCredentials
+from pydantic import BaseModel, EmailStr
+from sqlalchemy.orm import Session
+from datetime import timedelta
 
 from .database import Base, engine, SessionLocal
 from .models import (
@@ -11,6 +14,14 @@ from .models import (
     DuoRole,
 )
 from .email_sync import sync_emails_to_db
+from .auth import (
+    get_current_user,
+    get_password_hash,
+    verify_password,
+    create_access_token,
+    get_db,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+)
 import secrets
 
 Base.metadata.create_all(bind=engine)
@@ -20,32 +31,125 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Para el MVP usamos un usuario fijo (luego se reemplaza por autenticación real)
-CURRENT_USER_EMAIL = "diego.castro.lagos@gmail.com"
-
-
-def get_current_user(db):
-    user = db.query(User).filter(User.email == CURRENT_USER_EMAIL).first()
-    if not user:
-        user = User(email=CURRENT_USER_EMAIL, name="Diego")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    return user
-
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
+# ==================== AUTENTICACIÓN ====================
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: dict
+
+
+@app.post("/auth/register", response_model=TokenResponse)
+def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    """Registra un nuevo usuario"""
+    # Verificar si el usuario ya existe
+    existing_user = db.query(User).filter(User.email == request.email).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El correo electrónico ya está registrado"
+        )
+    
+    # Crear nuevo usuario
+    hashed_password = get_password_hash(request.password)
+    user = User(
+        email=request.email,
+        name=request.name,
+        password_hash=hashed_password
+    )
+    
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    # Crear token de acceso
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email},
+        expires_delta=access_token_expires
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name
+        }
+    }
+
+
+@app.post("/auth/login", response_model=TokenResponse)
+def login(request: LoginRequest, db: Session = Depends(get_db)):
+    """Inicia sesión con email y contraseña"""
+    # Buscar usuario
+    user = db.query(User).filter(User.email == request.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email o contraseña incorrectos"
+        )
+    
+    # Verificar contraseña
+    if not user.password_hash or not verify_password(request.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email o contraseña incorrectos"
+        )
+    
+    # Crear token de acceso
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email},
+        expires_delta=access_token_expires
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name
+        }
+    }
+
+
+@app.get("/auth/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    """Obtiene la información del usuario actual"""
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "name": current_user.name
+    }
+
+
 @app.post("/sync-email")
-def sync_email():
+def sync_email(current_user: User = Depends(get_current_user)):
     import logging
     logger = logging.getLogger(__name__)
-    logger.info(f"Iniciando sincronización de correo para: {CURRENT_USER_EMAIL}")
+    logger.info(f"Iniciando sincronización de correo para: {current_user.email}")
     try:
-        count = sync_emails_to_db(CURRENT_USER_EMAIL)
+        count = sync_emails_to_db(current_user.email)
         logger.info(f"Sincronización completada: {count} correos importados")
         return {"imported": count}
     except Exception as e:
@@ -54,21 +158,21 @@ def sync_email():
 
 
 @app.get("/transactions")
-def list_transactions(mode: str = Query("individual")):
-    db = SessionLocal()
-    user = get_current_user(db)
-
+def list_transactions(
+    mode: str = Query("individual"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     if mode == "duo":
         membership = (
             db.query(DuoMembership)
             .filter(
-                DuoMembership.user_id == user.id,
+                DuoMembership.user_id == current_user.id,
                 DuoMembership.status == DuoStatus.active,
             )
             .first()
         )
         if not membership:
-            db.close()
             return []
         room_id = membership.room_id
         txs = (
@@ -80,7 +184,7 @@ def list_transactions(mode: str = Query("individual")):
     else:
         txs = (
             db.query(Transaction)
-            .filter(Transaction.user_id == user.id)
+            .filter(Transaction.user_id == current_user.id)
             .order_by(Transaction.date_time.desc())
             .all()
         )
@@ -96,23 +200,23 @@ def list_transactions(mode: str = Query("individual")):
         }
         for t in txs
     ]
-    db.close()
     return result
 
 
 @app.put("/transactions/{transaction_id}")
-def update_transaction(transaction_id: int, tx: TransactionUpdate):
-    db = SessionLocal()
-    user = get_current_user(db)
-    
+def update_transaction(
+    transaction_id: int,
+    tx: TransactionUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     # Buscar la transacción
     transaction = db.query(Transaction).filter(
         Transaction.id == transaction_id,
-        Transaction.user_id == user.id
+        Transaction.user_id == current_user.id
     ).first()
     
     if not transaction:
-        db.close()
         raise HTTPException(status_code=404, detail="Transacción no encontrada")
     
     # Actualizar campos
@@ -136,20 +240,20 @@ def update_transaction(transaction_id: int, tx: TransactionUpdate):
         "date_time": transaction.date_time.isoformat(),
     }
     
-    db.close()
     return result
 
 
 @app.delete("/transactions/{transaction_id}")
-def delete_transaction(transaction_id: int):
-    db = SessionLocal()
+def delete_transaction(
+    transaction_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     try:
-        user = get_current_user(db)
-        
         # Buscar la transacción
         transaction = db.query(Transaction).filter(
             Transaction.id == transaction_id,
-            Transaction.user_id == user.id
+            Transaction.user_id == current_user.id
         ).first()
         
         if not transaction:
@@ -169,8 +273,6 @@ def delete_transaction(transaction_id: int):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al eliminar transacción: {str(e)}")
-    finally:
-        db.close()
 
 
 class JoinRequest(BaseModel):
@@ -178,16 +280,15 @@ class JoinRequest(BaseModel):
 
 
 @app.post("/duo/invite")
-def create_duo_invite():
-    db = SessionLocal()
-    user = get_current_user(db)
-
+def create_duo_invite(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     membership = (
-        db.query(DuoMembership).filter(DuoMembership.user_id == user.id).first()
+        db.query(DuoMembership).filter(DuoMembership.user_id == current_user.id).first()
     )
     if membership:
-        room = db.query(DuoRoom).get(membership.room_id)
-        db.close()
+        room = db.query(DuoRoom).filter(DuoRoom.id == membership.room_id).first()
         return {"invite_code": room.invite_code}
 
     code = secrets.token_urlsafe(8)
@@ -197,66 +298,63 @@ def create_duo_invite():
     db.refresh(room)
 
     owner = DuoMembership(
-        user_id=user.id,
+        user_id=current_user.id,
         room_id=room.id,
         role=DuoRole.owner,
         status=DuoStatus.active,
     )
     db.add(owner)
     db.commit()
-    db.close()
     return {"invite_code": code}
 
 
 @app.post("/duo/join")
-def join_duo(req: JoinRequest):
-    db = SessionLocal()
-    user = get_current_user(db)
-
+def join_duo(
+    req: JoinRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     room = db.query(DuoRoom).filter(DuoRoom.invite_code == req.invite_code).first()
     if not room:
-        db.close()
         raise HTTPException(status_code=404, detail="Código no válido")
 
     count_members = (
         db.query(DuoMembership).filter(DuoMembership.room_id == room.id).count()
     )
     if count_members >= 2:
-        db.close()
         raise HTTPException(status_code=400, detail="Este FinDuo ya está completo")
 
     membership = DuoMembership(
-        user_id=user.id,
+        user_id=current_user.id,
         room_id=room.id,
         role=DuoRole.partner,
         status=DuoStatus.active,
     )
     db.add(membership)
     db.commit()
-    db.close()
     return {"status": "joined"}
 
 
 @app.get("/me")
-def me():
-    db = SessionLocal()
-    user = get_current_user(db)
+def me(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     membership = (
         db.query(DuoMembership)
-        .filter(DuoMembership.user_id == user.id, DuoMembership.status == DuoStatus.active)
+        .filter(DuoMembership.user_id == current_user.id, DuoMembership.status == DuoStatus.active)
         .first()
     )
     duo = None
     if membership:
-        room = db.query(DuoRoom).get(membership.room_id)
+        room = db.query(DuoRoom).filter(DuoRoom.id == membership.room_id).first()
         duo = {
             "room_id": room.id,
             "invite_code": room.invite_code,
             "role": membership.role.value,
         }
-    db.close()
     return {
-        "name": user.name,
-        "email": user.email,
+        "name": current_user.name,
+        "email": current_user.email,
         "duo": duo,
     }

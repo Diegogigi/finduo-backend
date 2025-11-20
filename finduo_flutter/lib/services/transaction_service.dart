@@ -2,11 +2,17 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/transaction.dart';
+import 'auth_service.dart';
 
 class TransactionService {
+  final _authService = AuthService();
+
   Future<List<TransactionModel>> fetchTransactions({required String mode}) async {
+    final token = await _authService.getToken();
+    final headers = AuthService.getAuthHeaders(token);
+    
     final url = Uri.parse('${ApiConfig.baseUrl}/transactions?mode=$mode');
-    final resp = await http.get(url);
+    final resp = await http.get(url, headers: headers);
 
     if (resp.statusCode == 200) {
       final List<dynamic> data = jsonDecode(resp.body);
@@ -39,9 +45,12 @@ class TransactionService {
       
       print('Body: $body');
       
+      final token = await _authService.getToken();
+      final headers = AuthService.getAuthHeaders(token);
+      
       final resp = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: body,
       ).timeout(
         const Duration(seconds: 30),
@@ -84,9 +93,12 @@ class TransactionService {
         'date_time': dateTime.toUtc().toIso8601String(),
       });
       
+      final token = await _authService.getToken();
+      final headers = AuthService.getAuthHeaders(token);
+      
       final resp = await http.put(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: body,
       ).timeout(
         const Duration(seconds: 30),
@@ -111,9 +123,12 @@ class TransactionService {
       final url = Uri.parse('${ApiConfig.baseUrl}/transactions/$id');
       print('Eliminando transacción: $url');
       
+      final token = await _authService.getToken();
+      final headers = AuthService.getAuthHeaders(token);
+      
       final resp = await http.delete(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
       ).timeout(
         const Duration(seconds: 30),
         onTimeout: () {
@@ -137,9 +152,12 @@ class TransactionService {
       final url = Uri.parse('${ApiConfig.baseUrl}/sync-email');
       print('Sincronizando correo: $url');
       
+      final token = await _authService.getToken();
+      final headers = AuthService.getAuthHeaders(token);
+      
       final resp = await http.post(
         url,
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
       ).timeout(
         const Duration(seconds: 60),
         onTimeout: () {
