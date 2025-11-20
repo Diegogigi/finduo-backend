@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/duo_service.dart';
 import '../services/transaction_service.dart';
 
@@ -388,8 +389,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   IconButton(
                     icon: const Icon(Icons.copy),
                     onPressed: () {
+                      Clipboard.setData(ClipboardData(text: _inviteCode!));
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Funcionalidad próximamente disponible')),
+                        const SnackBar(
+                          content: Text('✓ Código copiado al portapapeles'),
+                          backgroundColor: Colors.green,
+                          duration: Duration(seconds: 2),
+                        ),
                       );
                     },
                   ),
@@ -416,12 +422,106 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildActions() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text(
+          'Cuenta',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black54,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _actionTile(
+          icon: Icons.edit_outlined,
+          title: 'Editar perfil',
+          subtitle: 'Cambiar nombre y correo',
+          onTap: _editProfile,
+        ),
+        const SizedBox(height: 8),
         _actionTile(
           icon: Icons.sync_rounded,
           title: 'Sincronizar datos',
           subtitle: 'Actualizar transacciones desde el correo',
           onTap: _syncData,
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Configuración',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black54,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _actionTile(
+          icon: Icons.notifications_outlined,
+          title: 'Notificaciones',
+          subtitle: 'Gestionar alertas y recordatorios',
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Funcionalidad próximamente disponible')),
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        _actionTile(
+          icon: Icons.lock_outline,
+          title: 'Privacidad y seguridad',
+          subtitle: 'Configurar privacidad de datos',
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Funcionalidad próximamente disponible')),
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        _actionTile(
+          icon: Icons.language_outlined,
+          title: 'Idioma',
+          subtitle: 'Español',
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Funcionalidad próximamente disponible')),
+            );
+          },
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Información',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black54,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _actionTile(
+          icon: Icons.help_outline,
+          title: 'Ayuda y soporte',
+          subtitle: 'Preguntas frecuentes y contacto',
+          onTap: () {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Ayuda y Soporte'),
+                content: const Text(
+                  '¿Necesitas ayuda?\n\n'
+                  'Para soporte técnico, contacta a:\n'
+                  'soporte@finduo.app\n\n'
+                  'O visita nuestra documentación en GitHub.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cerrar'),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
         const SizedBox(height: 8),
         _actionTile(
@@ -434,7 +534,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               builder: (context) => AlertDialog(
                 title: const Text('FinDuo'),
                 content: const Text(
-                  'Control de gastos individual y en pareja.\n\nVersión 0.1.0',
+                  'Control de gastos individual y en pareja.\n\n'
+                  'Versión: 0.1.0\n'
+                  'Desarrollado con Flutter y FastAPI\n\n'
+                  '© 2025 FinDuo',
                 ),
                 actions: [
                   TextButton(
@@ -446,7 +549,110 @@ class _ProfileScreenState extends State<ProfileScreen> {
             );
           },
         ),
+        const SizedBox(height: 8),
+        _actionTile(
+          icon: Icons.logout_outlined,
+          title: 'Cerrar sesión',
+          subtitle: 'Salir de tu cuenta',
+          onTap: _showLogoutDialog,
+          isDestructive: true,
+        ),
       ],
+    );
+  }
+
+  Future<void> _editProfile() async {
+    final nameController = TextEditingController(text: _name);
+    final emailController = TextEditingController(text: _email);
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Editar Perfil'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Nombre',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailController,
+              decoration: const InputDecoration(
+                labelText: 'Correo electrónico',
+                border: OutlineInputBorder(),
+              ),
+              enabled: false, // El correo no se puede cambiar por ahora
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2255FF),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      // Por ahora solo actualizamos localmente
+      // En el futuro se conectará con el backend
+      setState(() {
+        _name = nameController.text.trim();
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✓ Perfil actualizado'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cerrar sesión'),
+        content: const Text('¿Estás seguro de que deseas cerrar sesión?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Por ahora solo mostramos un mensaje
+              // En el futuro se implementará el cierre de sesión real
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Funcionalidad próximamente disponible'),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Cerrar sesión'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -455,6 +661,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    bool isDestructive = false,
   }) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
@@ -462,13 +669,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: const Color(0xFFF1F4FF),
+          color: isDestructive
+              ? Colors.red.shade50
+              : const Color(0xFFF1F4FF),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, color: const Color(0xFF2255FF), size: 20),
+        child: Icon(
+          icon,
+          color: isDestructive ? Colors.red : const Color(0xFF2255FF),
+          size: 20,
+        ),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.w500,
+          color: isDestructive ? Colors.red : null,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(
+          fontSize: 12,
+          color: isDestructive ? Colors.red.shade700 : null,
+        ),
+      ),
       trailing: const Icon(Icons.chevron_right_rounded),
       onTap: onTap,
     );
