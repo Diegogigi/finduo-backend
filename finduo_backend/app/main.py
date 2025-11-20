@@ -143,24 +143,34 @@ def update_transaction(transaction_id: int, tx: TransactionUpdate):
 @app.delete("/transactions/{transaction_id}")
 def delete_transaction(transaction_id: int):
     db = SessionLocal()
-    user = get_current_user(db)
-    
-    # Buscar la transacción
-    transaction = db.query(Transaction).filter(
-        Transaction.id == transaction_id,
-        Transaction.user_id == user.id
-    ).first()
-    
-    if not transaction:
+    try:
+        user = get_current_user(db)
+        
+        # Buscar la transacción
+        transaction = db.query(Transaction).filter(
+            Transaction.id == transaction_id,
+            Transaction.user_id == user.id
+        ).first()
+        
+        if not transaction:
+            raise HTTPException(status_code=404, detail="Transacción no encontrada")
+        
+        # Guardar ID antes de eliminar
+        transaction_id_backup = transaction.id
+        
+        # Eliminar usando el método correcto de SQLAlchemy
+        db.delete(transaction)
+        db.commit()
+        
+        return {"status": "deleted", "id": transaction_id_backup}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al eliminar transacción: {str(e)}")
+    finally:
         db.close()
-        raise HTTPException(status_code=404, detail="Transacción no encontrada")
-    
-    # Eliminar
-    db.delete(transaction)
-    db.commit()
-    db.close()
-    
-    return {"status": "deleted", "id": transaction_id}
 
 
 class JoinRequest(BaseModel):
