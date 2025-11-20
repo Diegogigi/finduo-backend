@@ -48,7 +48,6 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-    password: str
 
 
 class TokenResponse(BaseModel):
@@ -152,7 +151,7 @@ def sync_email(current_user: User = Depends(get_current_user)):
     try:
         count = sync_emails_to_db(current_user.email)
         logger.info(f"Sincronización completada: {count} correos importados")
-        return {"imported": count}
+    return {"imported": count}
     except Exception as e:
         logger.error(f"Error en sincronización: {e}", exc_info=True)
         return {"imported": 0, "error": str(e)}
