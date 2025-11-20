@@ -41,7 +41,7 @@ def fetch_bank_emails():
 
     # Lista de ubicaciones donde buscar (INBOX + etiquetas de Gmail)
     locations = ["INBOX", "INBOX/Compras", "INBOX/Bancos"]
-    
+
     # Buscar correos de ambas direcciones en todas las ubicaciones
     all_email_ids = set()
 
@@ -78,7 +78,9 @@ def fetch_bank_emails():
                         )
                         all_email_ids.update(found_ids)
                 else:
-                    logger.debug(f"No se encontraron correos de enviodigital en {location}")
+                    logger.debug(
+                        f"No se encontraron correos de enviodigital en {location}"
+                    )
             except Exception as e:
                 logger.warning(f"Error buscando enviodigital en {location}: {e}")
 
@@ -87,7 +89,9 @@ def fetch_bank_emails():
                 status, data = mail.search(
                     None, "FROM", "serviciodetransferencias@bancochile.cl"
                 )
-                logger.info(f"Búsqueda serviciodetransferencias en {location}: status={status}")
+                logger.info(
+                    f"Búsqueda serviciodetransferencias en {location}: status={status}"
+                )
                 if status == "OK" and data and data[0]:
                     email_ids_str = (
                         data[0].decode() if isinstance(data[0], bytes) else str(data[0])
@@ -100,9 +104,13 @@ def fetch_bank_emails():
                         )
                         all_email_ids.update(found_ids)
                 else:
-                    logger.debug(f"No se encontraron correos de serviciodetransferencias en {location}")
+                    logger.debug(
+                        f"No se encontraron correos de serviciodetransferencias en {location}"
+                    )
             except Exception as e:
-                logger.warning(f"Error buscando serviciodetransferencias en {location}: {e}")
+                logger.warning(
+                    f"Error buscando serviciodetransferencias en {location}: {e}"
+                )
 
         except Exception as e:
             logger.warning(f"Error procesando ubicación {location}: {e}")
