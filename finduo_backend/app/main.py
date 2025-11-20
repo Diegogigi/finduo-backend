@@ -100,6 +100,69 @@ def list_transactions(mode: str = Query("individual")):
     return result
 
 
+@app.put("/transactions/{transaction_id}")
+def update_transaction(transaction_id: int, tx: TransactionUpdate):
+    db = SessionLocal()
+    user = get_current_user(db)
+    
+    # Buscar la transacción
+    transaction = db.query(Transaction).filter(
+        Transaction.id == transaction_id,
+        Transaction.user_id == user.id
+    ).first()
+    
+    if not transaction:
+        db.close()
+        raise HTTPException(status_code=404, detail="Transacción no encontrada")
+    
+    # Actualizar campos
+    from datetime import datetime
+    date_time = datetime.fromisoformat(tx.date_time.replace('Z', '+00:00'))
+    
+    transaction.type = tx.type
+    transaction.description = tx.description
+    transaction.amount = tx.amount
+    transaction.date_time = date_time
+    
+    db.commit()
+    db.refresh(transaction)
+    
+    result = {
+        "id": transaction.id,
+        "type": transaction.type,
+        "description": transaction.description,
+        "amount": transaction.amount,
+        "currency": transaction.currency,
+        "date_time": transaction.date_time.isoformat(),
+    }
+    
+    db.close()
+    return result
+
+
+@app.delete("/transactions/{transaction_id}")
+def delete_transaction(transaction_id: int):
+    db = SessionLocal()
+    user = get_current_user(db)
+    
+    # Buscar la transacción
+    transaction = db.query(Transaction).filter(
+        Transaction.id == transaction_id,
+        Transaction.user_id == user.id
+    ).first()
+    
+    if not transaction:
+        db.close()
+        raise HTTPException(status_code=404, detail="Transacción no encontrada")
+    
+    # Eliminar
+    db.delete(transaction)
+    db.commit()
+    db.close()
+    
+    return {"status": "deleted", "id": transaction_id}
+
+
 class JoinRequest(BaseModel):
     invite_code: str
 

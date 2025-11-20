@@ -66,6 +66,72 @@ class TransactionService {
     }
   }
 
+  Future<void> updateTransaction({
+    required int id,
+    required String type,
+    required String description,
+    required int amount,
+    required DateTime dateTime,
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConfig.baseUrl}/transactions/$id');
+      print('Actualizando transacción: $url');
+      
+      final body = jsonEncode({
+        'type': type,
+        'description': description,
+        'amount': amount,
+        'date_time': dateTime.toUtc().toIso8601String(),
+      });
+      
+      final resp = await http.put(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Timeout: La operación está tomando demasiado tiempo');
+        },
+      );
+      
+      if (resp.statusCode == 200) {
+        print('Transacción actualizada exitosamente');
+      } else {
+        throw Exception('Error al actualizar transacción (${resp.statusCode}): ${resp.body}');
+      }
+    } catch (e) {
+      print('Error en updateTransaction: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteTransaction({required int id}) async {
+    try {
+      final url = Uri.parse('${ApiConfig.baseUrl}/transactions/$id');
+      print('Eliminando transacción: $url');
+      
+      final resp = await http.delete(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Timeout: La operación está tomando demasiado tiempo');
+        },
+      );
+      
+      if (resp.statusCode == 200) {
+        print('Transacción eliminada exitosamente');
+      } else {
+        throw Exception('Error al eliminar transacción (${resp.statusCode}): ${resp.body}');
+      }
+    } catch (e) {
+      print('Error en deleteTransaction: $e');
+      rethrow;
+    }
+  }
+
   Future<int> syncEmail({required String mode}) async {
     try {
       final url = Uri.parse('${ApiConfig.baseUrl}/sync-email');
