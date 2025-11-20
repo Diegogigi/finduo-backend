@@ -7,7 +7,8 @@
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 
 -- PASO 2: Agregar campo created_at
-ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+-- En PostgreSQL, usar 'timestamp without time zone' o simplemente 'timestamp'
+ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT CURRENT_TIMESTAMP;
 
 -- PASO 3: Actualizar usuarios existentes
 UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;

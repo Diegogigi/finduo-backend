@@ -153,7 +153,7 @@ Si quieres ejecutar todo de una vez, copia y pega esto:
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 
 -- Agregar created_at
-ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT CURRENT_TIMESTAMP;
 
 -- Actualizar usuarios existentes
 UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;

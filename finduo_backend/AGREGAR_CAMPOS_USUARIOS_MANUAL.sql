@@ -20,7 +20,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 -- PASO 2: Agregar campo created_at
 -- ============================================
 -- Este campo almacena la fecha y hora de creación del usuario
-ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT CURRENT_TIMESTAMP;
 
 -- Actualizar usuarios existentes con la fecha actual
 UPDATE users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL;
