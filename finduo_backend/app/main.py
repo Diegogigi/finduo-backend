@@ -39,6 +39,7 @@ def health():
 
 # ==================== AUTENTICACIÓN ====================
 
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
@@ -64,36 +65,27 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El correo electrónico ya está registrado"
+            detail="El correo electrónico ya está registrado",
         )
-    
+
     # Crear nuevo usuario
     hashed_password = get_password_hash(request.password)
-    user = User(
-        email=request.email,
-        name=request.name,
-        password_hash=hashed_password
-    )
-    
+    user = User(email=request.email, name=request.name, password_hash=hashed_password)
+
     db.add(user)
     db.commit()
     db.refresh(user)
-    
+
     # Crear token de acceso
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.email},
-        expires_delta=access_token_expires
+        data={"sub": user.email}, expires_delta=access_token_expires
     )
-    
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "name": user.name
-        }
+        "user": {"id": user.id, "email": user.email, "name": user.name},
     }
 
 
@@ -105,31 +97,28 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email o contraseña incorrectos"
+            detail="Email o contraseña incorrectos",
         )
-    
+
     # Verificar contraseña
-    if not user.password_hash or not verify_password(request.password, user.password_hash):
+    if not user.password_hash or not verify_password(
+        request.password, user.password_hash
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email o contraseña incorrectos"
+            detail="Email o contraseña incorrectos",
         )
-    
+
     # Crear token de acceso
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.email},
-        expires_delta=access_token_expires
+        data={"sub": user.email}, expires_delta=access_token_expires
     )
-    
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "name": user.name
-        }
+        "user": {"id": user.id, "email": user.email, "name": user.name},
     }
 
 
@@ -139,13 +128,14 @@ def get_me(current_user: User = Depends(get_current_user)):
     return {
         "id": current_user.id,
         "email": current_user.email,
-        "name": current_user.name
+        "name": current_user.name,
     }
 
 
 @app.post("/sync-email")
 def sync_email(current_user: User = Depends(get_current_user)):
     import logging
+
     logger = logging.getLogger(__name__)
     logger.info(f"Iniciando sincronización de correo para: {current_user.email}")
     try:
@@ -161,7 +151,7 @@ def sync_email(current_user: User = Depends(get_current_user)):
 def list_transactions(
     mode: str = Query("individual"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     if mode == "duo":
         membership = (
@@ -203,34 +193,45 @@ def list_transactions(
     return result
 
 
+class TransactionUpdate(BaseModel):
+    type: str
+    description: str
+    amount: int
+    date_time: str
+
+
 @app.put("/transactions/{transaction_id}")
 def update_transaction(
     transaction_id: int,
     tx: TransactionUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     # Buscar la transacción
-    transaction = db.query(Transaction).filter(
-        Transaction.id == transaction_id,
-        Transaction.user_id == current_user.id
-    ).first()
-    
+    transaction = (
+        db.query(Transaction)
+        .filter(
+            Transaction.id == transaction_id, Transaction.user_id == current_user.id
+        )
+        .first()
+    )
+
     if not transaction:
         raise HTTPException(status_code=404, detail="Transacción no encontrada")
-    
+
     # Actualizar campos
     from datetime import datetime
-    date_time = datetime.fromisoformat(tx.date_time.replace('Z', '+00:00'))
-    
+
+    date_time = datetime.fromisoformat(tx.date_time.replace("Z", "+00:00"))
+
     transaction.type = tx.type
     transaction.description = tx.description
     transaction.amount = tx.amount
     transaction.date_time = date_time
-    
+
     db.commit()
     db.refresh(transaction)
-    
+
     result = {
         "id": transaction.id,
         "type": transaction.type,
@@ -239,7 +240,7 @@ def update_transaction(
         "currency": transaction.currency,
         "date_time": transaction.date_time.isoformat(),
     }
-    
+
     return result
 
 
@@ -247,32 +248,37 @@ def update_transaction(
 def delete_transaction(
     transaction_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     try:
         # Buscar la transacción
-        transaction = db.query(Transaction).filter(
-            Transaction.id == transaction_id,
-            Transaction.user_id == current_user.id
-        ).first()
-        
+        transaction = (
+            db.query(Transaction)
+            .filter(
+                Transaction.id == transaction_id, Transaction.user_id == current_user.id
+            )
+            .first()
+        )
+
         if not transaction:
             raise HTTPException(status_code=404, detail="Transacción no encontrada")
-        
+
         # Guardar ID antes de eliminar
         transaction_id_backup = transaction.id
-        
+
         # Eliminar usando el método correcto de SQLAlchemy
         db.delete(transaction)
         db.commit()
-        
+
         return {"status": "deleted", "id": transaction_id_backup}
     except HTTPException:
         db.rollback()
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error al eliminar transacción: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error al eliminar transacción: {str(e)}"
+        )
 
 
 class JoinRequest(BaseModel):
@@ -281,8 +287,7 @@ class JoinRequest(BaseModel):
 
 @app.post("/duo/invite")
 def create_duo_invite(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     membership = (
         db.query(DuoMembership).filter(DuoMembership.user_id == current_user.id).first()
@@ -312,7 +317,7 @@ def create_duo_invite(
 def join_duo(
     req: JoinRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     room = db.query(DuoRoom).filter(DuoRoom.invite_code == req.invite_code).first()
     if not room:
@@ -336,13 +341,13 @@ def join_duo(
 
 
 @app.get("/me")
-def me(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     membership = (
         db.query(DuoMembership)
-        .filter(DuoMembership.user_id == current_user.id, DuoMembership.status == DuoStatus.active)
+        .filter(
+            DuoMembership.user_id == current_user.id,
+            DuoMembership.status == DuoStatus.active,
+        )
         .first()
     )
     duo = None
