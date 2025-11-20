@@ -18,7 +18,7 @@ class TransactionService {
     }
   }
 
-  Future<void> syncEmail({required String mode}) async {
+  Future<int> syncEmail({required String mode}) async {
     try {
       final url = Uri.parse('${ApiConfig.baseUrl}/sync-email');
       print('Sincronizando correo: $url');
@@ -37,8 +37,10 @@ class TransactionService {
       print('Body: ${resp.body}');
       
       if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body);
-        print('Sincronización exitosa. Importados: ${data['imported']}');
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final imported = data['imported'] as int;
+        print('Sincronización exitosa. Importados: $imported');
+        return imported;
       } else {
         throw Exception('Error al sincronizar correo (${resp.statusCode}): ${resp.body}');
       }

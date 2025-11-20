@@ -75,23 +75,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       print('Iniciando sincronización...');
       // Sincronizar en modo individual (puedes cambiarlo según necesites)
-      await _transactionService.syncEmail(mode: 'individual');
+      final imported = await _transactionService.syncEmail(mode: 'individual');
       
       if (!mounted) return;
       
       // Cerrar el SnackBar anterior
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       
-      // Mostrar mensaje de éxito
+      // Mostrar mensaje de éxito con cantidad de correos importados
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✓ Sincronización completada'),
+        SnackBar(
+          content: Text('✓ Sincronización completada\n$imported correo(s) importado(s)'),
           backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
+          duration: const Duration(seconds: 4),
         ),
       );
       
-      print('Sincronización completada exitosamente');
+      print('Sincronización completada exitosamente. Importados: $imported');
     } catch (e) {
       print('Error en _syncData: $e');
       
