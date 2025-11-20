@@ -41,8 +41,16 @@ def health():
 
 @app.post("/sync-email")
 def sync_email():
-    count = sync_emails_to_db(CURRENT_USER_EMAIL)
-    return {"imported": count}
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Iniciando sincronización de correo para: {CURRENT_USER_EMAIL}")
+    try:
+        count = sync_emails_to_db(CURRENT_USER_EMAIL)
+        logger.info(f"Sincronización completada: {count} correos importados")
+        return {"imported": count}
+    except Exception as e:
+        logger.error(f"Error en sincronización: {e}", exc_info=True)
+        return {"imported": 0, "error": str(e)}
 
 
 @app.get("/transactions")

@@ -2,10 +2,23 @@ import imaplib
 import email
 import os
 import re
+import logging
+import sys
 from datetime import datetime
 
 from .database import SessionLocal
 from .models import Transaction, User
+
+# Configurar logging para que se vea en Railway
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),  # Asegurar que va a stdout
+        logging.StreamHandler(sys.stderr),  # También a stderr por si acaso
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 IMAP_HOST = "imap.gmail.com"  # Cambia según tu proveedor de correo
@@ -25,13 +38,13 @@ def get_imap_conn():
 def fetch_bank_emails():
     """Obtiene los últimos correos del Banco de Chile."""
     mail = get_imap_conn()
-    
+
     # Probar con INBOX primero
     try:
         status = mail.select("INBOX")
-        print(f"[DEBUG] Seleccionando INBOX: {status}")
+        logger.info(f"Seleccionando INBOX: {status}")
     except Exception as e:
-        print(f"[ERROR] Error seleccionando INBOX: {e}")
+        logger.error(f"Error seleccionando INBOX: {e}", exc_info=True)
         mail.logout()
         return []
 
@@ -41,88 +54,95 @@ def fetch_bank_emails():
     # Buscar correos de enviodigital@bancochile.cl
     try:
         status, data = mail.search(None, "FROM", "enviodigital@bancochile.cl")
-        print(f"[DEBUG] Búsqueda enviodigital: status={status}, data={data}")
+        logger.info(f"Búsqueda enviodigital: status={status}, data={data}")
         if status == "OK" and data and data[0]:
-            email_ids_str = data[0].decode() if isinstance(data[0], bytes) else str(data[0])
+            email_ids_str = (
+                data[0].decode() if isinstance(data[0], bytes) else str(data[0])
+            )
             email_ids_str = email_ids_str.strip()
             if email_ids_str:
                 found_ids = email_ids_str.split()
-                print(f"[DEBUG] Encontrados {len(found_ids)} correos de enviodigital@bancochile.cl")
+                logger.info(f"Encontrados {len(found_ids)} correos de enviodigital@bancochile.cl")
                 all_email_ids.update(found_ids)
             else:
-                print("[DEBUG] No se encontraron correos de enviodigital@bancochile.cl")
+                logger.warning("No se encontraron correos de enviodigital@bancochile.cl")
         else:
-            print("[DEBUG] Búsqueda de enviodigital falló o no devolvió datos")
+            logger.warning("Búsqueda de enviodigital falló o no devolvió datos")
     except Exception as e:
-        print(f"[ERROR] Error buscando enviodigital: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error buscando enviodigital: {e}", exc_info=True)
 
     # Buscar correos de serviciodetransferencias@bancochile.cl
     try:
-        status, data = mail.search(None, "FROM", "serviciodetransferencias@bancochile.cl")
-        print(f"[DEBUG] Búsqueda serviciodetransferencias: status={status}, data={data}")
+        status, data = mail.search(
+            None, "FROM", "serviciodetransferencias@bancochile.cl"
+        )
+        logger.info(f"Búsqueda serviciodetransferencias: status={status}, data={data}")
         if status == "OK" and data and data[0]:
-            email_ids_str = data[0].decode() if isinstance(data[0], bytes) else str(data[0])
+            email_ids_str = (
+                data[0].decode() if isinstance(data[0], bytes) else str(data[0])
+            )
             email_ids_str = email_ids_str.strip()
             if email_ids_str:
                 found_ids = email_ids_str.split()
-                print(f"[DEBUG] Encontrados {len(found_ids)} correos de serviciodetransferencias@bancochile.cl")
+                logger.info(f"Encontrados {len(found_ids)} correos de serviciodetransferencias@bancochile.cl")
                 all_email_ids.update(found_ids)
             else:
-                print("[DEBUG] No se encontraron correos de serviciodetransferencias@bancochile.cl")
+                logger.warning("No se encontraron correos de serviciodetransferencias@bancochile.cl")
         else:
-            print("[DEBUG] Búsqueda de serviciodetransferencias falló o no devolvió datos")
+            logger.warning("Búsqueda de serviciodetransferencias falló o no devolvió datos")
     except Exception as e:
-        print(f"[ERROR] Error buscando serviciodetransferencias: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error buscando serviciodetransferencias: {e}", exc_info=True)
 
-    print(f"[DEBUG] Total de IDs de correos encontrados: {len(all_email_ids)}")
+    logger.info(f"Total de IDs de correos encontrados: {len(all_email_ids)}")
 
     if not all_email_ids:
-        print("[DEBUG] No se encontraron correos. Verificando si hay correos en el INBOX...")
+        logger.warning("No se encontraron correos. Verificando si hay correos en el INBOX...")
         try:
             # Intentar buscar todos los correos recientes para debug
             status, data = mail.search(None, "ALL")
             if status == "OK" and data and data[0]:
-                all_ids = data[0].decode() if isinstance(data[0], bytes) else str(data[0])
+                all_ids = (
+                    data[0].decode() if isinstance(data[0], bytes) else str(data[0])
+                )
                 all_ids = all_ids.strip()
                 total = len(all_ids.split()) if all_ids else 0
-                print(f"[DEBUG] Total de correos en INBOX: {total}")
+                logger.info(f"Total de correos en INBOX: {total}")
         except Exception as e:
-            print(f"[ERROR] Error contando correos: {e}")
-        
+            logger.error(f"Error contando correos: {e}", exc_info=True)
+
         mail.logout()
         return []
 
     # Ordenar y tomar los últimos 30
     try:
-        email_ids = sorted(list(all_email_ids), key=lambda x: int(x.decode() if isinstance(x, bytes) else x))[-30:]
+        email_ids = sorted(
+            list(all_email_ids),
+            key=lambda x: int(x.decode() if isinstance(x, bytes) else x),
+        )[-30:]
     except Exception as e:
-        print(f"[ERROR] Error ordenando IDs: {e}")
+        logger.error(f"Error ordenando IDs: {e}", exc_info=True)
         email_ids = list(all_email_ids)[-30:]
-    
-    print(f"[DEBUG] Procesando {len(email_ids)} correos (últimos 30 de {len(all_email_ids)} encontrados)")
+
+    logger.info(f"Procesando {len(email_ids)} correos (últimos 30 de {len(all_email_ids)} encontrados)")
     messages = []
     for i, eid in enumerate(email_ids):
         try:
             eid_str = eid.decode() if isinstance(eid, bytes) else str(eid)
-            status, msg_data = mail.fetch(eid_str.encode() if isinstance(eid_str, str) else eid_str, "(RFC822)")
+            status, msg_data = mail.fetch(
+                eid_str.encode() if isinstance(eid_str, str) else eid_str, "(RFC822)"
+            )
             if status != "OK":
-                print(f"[DEBUG] Error fetch correo {i+1} (ID: {eid_str}): status={status}")
+                logger.warning(f"Error fetch correo {i+1} (ID: {eid_str}): status={status}")
                 continue
             msg = email.message_from_bytes(msg_data[0][1])
-            
+
             # Log del asunto para debugging
             subject = msg.get("Subject", "Sin asunto")
             from_addr = msg.get("From", "Sin remitente")
-            print(f"[DEBUG] Correo {i+1}: From={from_addr[:50]}, Subject={subject[:50]}")
-            
+            logger.info(f"Correo {i+1}: From={from_addr[:50]}, Subject={subject[:50]}")
+
         except Exception as e:
-            print(f"[ERROR] Error procesando correo {i+1} (ID: {eid}): {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error procesando correo {i+1} (ID: {eid}): {e}", exc_info=True)
             continue
 
         if msg.is_multipart():
@@ -136,26 +156,27 @@ def fetch_bank_emails():
                         if payload:
                             body += payload.decode("utf-8", errors="ignore")
                     except Exception as e:
-                        print(f"[DEBUG] Error decodificando text/plain: {e}")
+                        logger.debug(f"Error decodificando text/plain: {e}")
                 elif content_type == "text/html":
                     try:
                         payload = part.get_payload(decode=True)
                         if payload:
                             html_body += payload.decode("utf-8", errors="ignore")
                     except Exception as e:
-                        print(f"[DEBUG] Error decodificando text/html: {e}")
-            
+                        logger.debug(f"Error decodificando text/html: {e}")
+
             # Si no hay texto plano, usar HTML
             if not body and html_body:
                 # Intentar extraer texto del HTML (básico)
                 import re as re_module
-                body = re_module.sub(r'<[^>]+>', ' ', html_body)
-                body = re_module.sub(r'\s+', ' ', body)
-            
+
+                body = re_module.sub(r"<[^>]+>", " ", html_body)
+                body = re_module.sub(r"\s+", " ", body)
+
             if body:
                 messages.append(body)
             else:
-                print(f"[DEBUG] Correo {i+1}: No se pudo extraer contenido")
+                logger.warning(f"Correo {i+1}: No se pudo extraer contenido")
         else:
             try:
                 body = msg.get_payload(decode=True)
@@ -163,9 +184,9 @@ def fetch_bank_emails():
                     body = body.decode("utf-8", errors="ignore")
                     messages.append(body)
                 else:
-                    print(f"[DEBUG] Correo {i+1}: Payload vacío")
+                    logger.warning(f"Correo {i+1}: Payload vacío")
             except Exception as e:
-                print(f"[DEBUG] Error decodificando correo simple: {e}")
+                logger.error(f"Error decodificando correo simple: {e}", exc_info=True)
 
     mail.logout()
     return messages
@@ -211,36 +232,40 @@ def parse_purchase(body: str):
         if m:
             try:
                 groups = m.groups()
-                print(f"[DEBUG] Patrón {pattern_num + 1} coincidió, grupos: {len(groups)}")
-                
+                logger.debug(f"Patrón {pattern_num + 1} coincidió, grupos: {len(groups)}")
+
                 if len(groups) >= 3:
                     # Extraer monto
                     amount_str = groups[0].replace(".", "").replace(",", "").strip()
                     amount = int(amount_str)
-                    
+
                     # Extraer descripción
                     if len(groups) >= 4:
                         merchant = groups[1].strip()
                         date_str = groups[2]
-                        time_str = groups[3] if len(groups) > 3 and groups[3] else "00:00"
+                        time_str = (
+                            groups[3] if len(groups) > 3 and groups[3] else "00:00"
+                        )
                     elif len(groups) == 3:
                         # Formato: monto, fecha, hora opcional
                         merchant = "Compra"  # Descripción por defecto
-                        date_str = groups[1] if '/' in groups[1] else groups[2]
-                        time_str = groups[2] if ':' in str(groups[2]) else "00:00"
+                        date_str = groups[1] if "/" in groups[1] else groups[2]
+                        time_str = groups[2] if ":" in str(groups[2]) else "00:00"
                     else:
                         continue
-                    
+
                     # Limpiar descripción (tomar primeros 100 caracteres)
                     merchant = merchant[:100].strip() if merchant else "Compra"
-                    
+
                     # Parsear fecha y hora
-                    if time_str and ':' in str(time_str):
-                        dt = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M")
+                    if time_str and ":" in str(time_str):
+                        dt = datetime.strptime(
+                            f"{date_str} {time_str}", "%d/%m/%Y %H:%M"
+                        )
                     else:
                         dt = datetime.strptime(f"{date_str}", "%d/%m/%Y")
 
-                    print(f"[DEBUG] Compra parseada: ${amount} CLP en {merchant} el {dt}")
+                    logger.info(f"Compra parseada: ${amount} CLP en {merchant} el {dt}")
                     return dict(
                         type="purchase",
                         amount=amount,
@@ -248,7 +273,7 @@ def parse_purchase(body: str):
                         date_time=dt,
                     )
             except (ValueError, IndexError, AttributeError) as e:
-                print(f"[DEBUG] Error parseando compra con patrón {pattern_num + 1}: {e}")
+                logger.debug(f"Error parseando compra con patrón {pattern_num + 1}: {e}")
                 continue
 
     return None
@@ -258,7 +283,9 @@ def parse_transfer(body: str):
     # Patrones más flexibles para transferencias
     patterns = [
         re.compile(r"monto\s+\$([\d\.]+)", re.IGNORECASE),
-        re.compile(r"transferencia.*?a\s+terceros.*?\$([\d\.]+)", re.IGNORECASE | re.DOTALL),
+        re.compile(
+            r"transferencia.*?a\s+terceros.*?\$([\d\.]+)", re.IGNORECASE | re.DOTALL
+        ),
         re.compile(r"transferencia.*?\$([\d\.]+)", re.IGNORECASE | re.DOTALL),
         re.compile(r"\$([\d\.]+).*?transferencia", re.IGNORECASE | re.DOTALL),
         re.compile(r"monto.*?(\d+[\.\d]*)", re.IGNORECASE),
@@ -316,8 +343,14 @@ def sync_emails_to_db(user_email: str):
         db.commit()
         db.refresh(user)
 
-    bodies = fetch_bank_emails()
-    print(f"[DEBUG] Se encontraron {len(bodies)} correos para procesar")
+    logger.info("Iniciando sincronización de correos...")
+    try:
+        bodies = fetch_bank_emails()
+        logger.info(f"Se encontraron {len(bodies)} correos para procesar")
+    except Exception as e:
+        logger.error(f"Error al obtener correos: {e}", exc_info=True)
+        db.close()
+        return 0
 
     count = 0
     skipped = 0
@@ -329,10 +362,8 @@ def sync_emails_to_db(user_email: str):
             if not info:
                 # Mostrar un preview del correo para debugging
                 preview = body[:200].replace("\n", " ").strip()
-                print(
-                    f"[DEBUG] Correo {i+1}: No se pudo parsear (no coincide con patrones)"
-                )
-                print(f"[DEBUG] Preview: {preview}...")
+                logger.warning(f"Correo {i+1}: No se pudo parsear (no coincide con patrones)")
+                logger.debug(f"Preview: {preview}...")
                 continue
 
             # Verificar si la transacción ya existe (evitar duplicados)
@@ -349,9 +380,7 @@ def sync_emails_to_db(user_email: str):
             )
 
             if existing:
-                print(
-                    f"[DEBUG] Correo {i+1}: Transacción duplicada - {info['type']} ${info['amount']} CLP en {info['date_time']}"
-                )
+                logger.info(f"Correo {i+1}: Transacción duplicada - {info['type']} ${info['amount']} CLP en {info['date_time']}")
                 skipped += 1
                 continue
 
@@ -364,17 +393,13 @@ def sync_emails_to_db(user_email: str):
             )
             db.add(tx)
             count += 1
-            print(
-                f"[DEBUG] Correo {i+1}: Transacción creada - {info['type']} ${info['amount']} CLP en {info['date_time']}"
-            )
+            logger.info(f"Correo {i+1}: Transacción creada - {info['type']} ${info['amount']} CLP en {info['date_time']}")
         except Exception as e:
-            print(f"[ERROR] Correo {i+1}: Error al procesar - {str(e)}")
+            logger.error(f"Correo {i+1}: Error al procesar - {str(e)}", exc_info=True)
             errors += 1
             continue
 
     db.commit()
-    print(
-        f"[DEBUG] Resumen: {count} importadas, {skipped} duplicadas, {errors} errores"
-    )
+    logger.info(f"Resumen: {count} importadas, {skipped} duplicadas, {errors} errores")
     db.close()
     return count
