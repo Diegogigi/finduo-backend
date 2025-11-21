@@ -15,10 +15,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _service = TransactionService();
+  final _authService = AuthService();
   List<TransactionModel> _transactions = [];
   bool _isLoading = false;
   bool _isDuoMode = false; // false = Individual, true = Duo
   String _error = '';
+  String _userName = 'Usuario'; // Nombre del usuario por defecto
 
   @override
   void initState() {
@@ -28,12 +30,31 @@ class _HomeScreenState extends State<HomeScreen> {
     _isLoading = false;
     _isDuoMode = false;
     _error = '';
+    _userName = 'Usuario';
+    
+    // Cargar nombre del usuario
+    _loadUserName();
+    
     // Cargar transacciones después de un delay más largo para asegurar que el token esté completamente guardado
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         _loadTransactions();
       }
     });
+  }
+
+  Future<void> _loadUserName() async {
+    try {
+      final user = await _authService.getUser();
+      if (user != null && user['name'] != null) {
+        setState(() {
+          _userName = user['name'] as String;
+        });
+      }
+    } catch (e) {
+      print('Error al cargar nombre de usuario: $e');
+      // Mantener el nombre por defecto si hay error
+    }
   }
 
   Future<void> _loadTransactions() async {
@@ -314,18 +335,18 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(width: 12),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
+          children: [
+            const Text(
               'FinDuo',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
               ),
             ),
-            SizedBox(height: 2),
+            const SizedBox(height: 2),
             Text(
-              'Hola, Diego 👋',
-              style: TextStyle(
+              'Hola, $_userName 👋',
+              style: const TextStyle(
                 fontSize: 14,
                 color: Colors.black54,
               ),
