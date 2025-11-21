@@ -64,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
       
       // Éxito: actualizar estado con las transacciones (puede estar vacío para usuarios nuevos)
       setState(() {
-        _transactions = txs ?? [];
+        _transactions = txs;
         _error = ''; // Asegurar que no haya error
         _isLoading = false;
       });
