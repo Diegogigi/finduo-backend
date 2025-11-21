@@ -127,7 +127,7 @@ class _AddIncomeScreenState extends State<AddIncomeScreen> {
               
               // Selector de tipo de ingreso
               DropdownButtonFormField<String>(
-                value: _selectedType,
+                initialValue: _selectedType,
                 decoration: InputDecoration(
                   labelText: 'Tipo de ingreso',
                   prefixIcon: const Icon(Icons.category_outlined),

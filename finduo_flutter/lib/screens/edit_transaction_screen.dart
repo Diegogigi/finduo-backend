@@ -139,7 +139,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
               // Selector de tipo (solo si es ingreso, mostrar opciones)
               if (isIncome)
                 DropdownButtonFormField<String>(
-                  value: _selectedType,
+                  initialValue: _selectedType,
                   decoration: InputDecoration(
                     labelText: 'Tipo de movimiento',
                     prefixIcon: const Icon(Icons.category_outlined),
