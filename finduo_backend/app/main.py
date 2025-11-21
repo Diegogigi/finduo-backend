@@ -3,8 +3,12 @@ from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from datetime import timedelta
+import logging
 
 from .database import Base, engine, SessionLocal
+
+# Suprimir advertencias de passlib (ya no lo usamos)
+logging.getLogger("passlib").setLevel(logging.ERROR)
 from .models import (
     Transaction,
     User,
