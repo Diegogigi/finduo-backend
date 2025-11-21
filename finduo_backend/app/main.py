@@ -197,11 +197,70 @@ def list_transactions(
     return result
 
 
+class TransactionCreate(BaseModel):
+    type: str
+    description: str
+    amount: int
+    date_time: str
+    mode: str = "individual"
+
+
 class TransactionUpdate(BaseModel):
     type: str
     description: str
     amount: int
     date_time: str
+
+
+@app.post("/transactions")
+def create_transaction(
+    tx: TransactionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Crea una nueva transacción"""
+    from datetime import datetime
+
+    # Parsear fecha
+    date_time = datetime.fromisoformat(tx.date_time.replace("Z", "+00:00"))
+
+    # Crear transacción
+    transaction = Transaction(
+        user_id=current_user.id,
+        type=tx.type,
+        description=tx.description,
+        amount=tx.amount,
+        currency="CLP",
+        date_time=date_time,
+    )
+
+    # Si es modo duo, agregar al room
+    if tx.mode == "duo":
+        membership = (
+            db.query(DuoMembership)
+            .filter(
+                DuoMembership.user_id == current_user.id,
+                DuoMembership.status == DuoStatus.active,
+            )
+            .first()
+        )
+        if membership:
+            transaction.duo_room_id = membership.room_id
+
+    db.add(transaction)
+    db.commit()
+    db.refresh(transaction)
+
+    result = {
+        "id": transaction.id,
+        "type": transaction.type,
+        "description": transaction.description,
+        "amount": transaction.amount,
+        "currency": transaction.currency,
+        "date_time": transaction.date_time.isoformat(),
+    }
+
+    return result
 
 
 @app.put("/transactions/{transaction_id}")
