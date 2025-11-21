@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -15,36 +15,46 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")  # 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30 * 24 * 60  # 30 días
 
-# Contexto para hasheo de contraseñas
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # Esquema de autenticación Bearer
 security = HTTPBearer()
 
 
+def _truncate_password(password: str) -> bytes:
+    """Trunca la contraseña a 72 bytes (límite de bcrypt)"""
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        return password_bytes[:72]
+    return password_bytes
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifica si la contraseña plana coincide con el hash"""
-    # Bcrypt tiene un límite de 72 bytes para las contraseñas
-    # Aplicar el mismo truncamiento que en el hash
-    password_bytes = plain_password.encode('utf-8')
-    if len(password_bytes) > 72:
-        password_bytes = password_bytes[:72]
-        plain_password = password_bytes.decode('utf-8', errors='ignore')
-    
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        # Truncar contraseña a 72 bytes (límite de bcrypt)
+        password_bytes = _truncate_password(plain_password)
+        
+        # Verificar contraseña usando bcrypt directamente
+        if isinstance(hashed_password, str):
+            hashed_password = hashed_password.encode('utf-8')
+        
+        return bcrypt.checkpw(password_bytes, hashed_password)
+    except Exception:
+        return False
 
 
 def get_password_hash(password: str) -> str:
     """Genera el hash de una contraseña"""
-    # Bcrypt tiene un límite de 72 bytes para las contraseñas
-    # Convertir a bytes y truncar si es necesario
-    password_bytes = password.encode('utf-8')
-    if len(password_bytes) > 72:
-        # Truncar a 72 bytes máximo
-        password_bytes = password_bytes[:72]
-        password = password_bytes.decode('utf-8', errors='ignore')
+    # Truncar contraseña a 72 bytes (límite de bcrypt)
+    password_bytes = _truncate_password(password)
     
-    return pwd_context.hash(password)
+    # Generar salt
+    salt = bcrypt.gensalt()
+    
+    # Hash de la contraseña
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    
+    # Devolver como string
+    return hashed.decode('utf-8')
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
