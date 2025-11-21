@@ -33,11 +33,46 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final mode = _isDuoMode ? 'duo' : 'individual';
       final txs = await _service.fetchTransactions(mode: mode);
-      setState(() => _transactions = txs);
+      setState(() {
+        _transactions = txs;
+        _error = ''; // Limpiar error si fue exitoso
+      });
     } catch (e) {
-      setState(() => _error = e.toString());
+      // Extraer mensaje de error más claro
+      String errorMessage = e.toString();
+      if (errorMessage.contains('401') || errorMessage.contains('Sesión expirada')) {
+        errorMessage = 'Sesión expirada. Por favor, inicia sesión nuevamente.';
+      } else if (errorMessage.contains('Timeout')) {
+        errorMessage = 'La conexión está tomando demasiado tiempo. Verifica tu conexión a internet.';
+      } else if (errorMessage.contains('No hay token')) {
+        errorMessage = 'No hay sesión activa. Por favor, inicia sesión nuevamente.';
+      }
+      
+      setState(() => _error = errorMessage);
+      
+      // Mostrar snackbar adicional para errores críticos
+      if (!mounted) return;
+      if (errorMessage.contains('Sesión expirada') || errorMessage.contains('No hay sesión')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Cerrar sesión',
+              textColor: Colors.white,
+              onPressed: () {
+                // Aquí podrías navegar a la pantalla de login
+                // Navigator.of(context).pushReplacementNamed('/login');
+              },
+            ),
+          ),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -123,9 +158,26 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 8),
                     if (_error.isNotEmpty)
-                      Text(
-                        _error,
-                        style: const TextStyle(color: Colors.red),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _error,
+                                style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                   ],
                 ),

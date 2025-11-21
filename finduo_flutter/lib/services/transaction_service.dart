@@ -8,19 +8,41 @@ class TransactionService {
   final _authService = AuthService();
 
   Future<List<TransactionModel>> fetchTransactions({required String mode}) async {
-    final token = await _authService.getToken();
-    final headers = AuthService.getAuthHeaders(token);
-    
-    final url = Uri.parse('${ApiConfig.baseUrl}/transactions?mode=$mode');
-    final resp = await http.get(url, headers: headers);
+    try {
+      final token = await _authService.getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No hay token de autenticación. Por favor, inicia sesión nuevamente.');
+      }
+      
+      final headers = AuthService.getAuthHeaders(token);
+      
+      final url = Uri.parse('${ApiConfig.baseUrl}/transactions?mode=$mode');
+      print('Obteniendo transacciones: $url');
+      
+      final resp = await http.get(url, headers: headers).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception('Timeout: La operación está tomando demasiado tiempo');
+        },
+      );
 
-    if (resp.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(resp.body);
-      return data
-          .map((e) => TransactionModel.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } else {
-      throw Exception('Error al obtener movimientos (${resp.statusCode})');
+      print('Respuesta del servidor: ${resp.statusCode}');
+      print('Body: ${resp.body}');
+
+      if (resp.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(resp.body);
+        return data
+            .map((e) => TransactionModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } else if (resp.statusCode == 401) {
+        throw Exception('Sesión expirada. Por favor, inicia sesión nuevamente.');
+      } else {
+        final errorDetail = resp.body.isNotEmpty ? '${resp.body}' : 'Error desconocido';
+        throw Exception('Error al obtener movimientos (${resp.statusCode}): $errorDetail');
+      }
+    } catch (e) {
+      print('Error en fetchTransactions: $e');
+      rethrow;
     }
   }
 
