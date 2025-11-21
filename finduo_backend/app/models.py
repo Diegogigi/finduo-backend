@@ -12,6 +12,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     name = Column(String)
+    password_hash = Column(String, nullable=True)  # Nullable para compatibilidad con usuarios existentes
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     transactions = relationship("Transaction", back_populates="user")
     duo_memberships = relationship("DuoMembership", back_populates="user")
@@ -67,3 +69,4 @@ class Transaction(Base):
 
     user = relationship("User", back_populates="transactions")
     duo_room = relationship("DuoRoom", back_populates="transactions")
+
