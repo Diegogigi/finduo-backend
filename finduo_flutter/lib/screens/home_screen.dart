@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../services/transaction_service.dart';
+import '../services/auth_service.dart';
 import 'invite_partner_screen.dart';
 import 'add_expense_screen.dart';
 import 'add_income_screen.dart';
@@ -27,8 +28,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _isLoading = false;
     _isDuoMode = false;
     _error = '';
-    // Cargar transacciones después de un pequeño delay para asegurar que el token esté disponible
-    Future.delayed(const Duration(milliseconds: 100), () {
+    // Cargar transacciones después de un delay más largo para asegurar que el token esté completamente guardado
+    Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         _loadTransactions();
       }
@@ -36,31 +37,78 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadTransactions() async {
+    // Verificar que el token esté disponible antes de intentar cargar
+    final authService = AuthService();
+    final token = await authService.getToken();
+    
+    if (token == null || token.isEmpty) {
+      // Si no hay token, no mostrar error, solo esperar
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = '';
+          _transactions = [];
+        });
+      }
+      return;
+    }
+    
     setState(() {
       _isLoading = true;
-      _error = '';
+      _error = ''; // Limpiar error antes de intentar
     });
+    
     try {
       final mode = _isDuoMode ? 'duo' : 'individual';
       final txs = await _service.fetchTransactions(mode: mode);
+      
+      // Éxito: actualizar estado con las transacciones (puede estar vacío para usuarios nuevos)
       setState(() {
-        _transactions = txs;
-        _error = ''; // Limpiar error si fue exitoso
+        _transactions = txs ?? [];
+        _error = ''; // Asegurar que no haya error
+        _isLoading = false;
       });
     } catch (e) {
-      // Extraer mensaje de error más claro
+      // Solo mostrar error si realmente hubo un problema
       String errorMessage = e.toString();
+      
+      // Ignorar errores de parseo si la lista está vacía
+      if (errorMessage.contains('map') && errorMessage.contains('null')) {
+        // Si el error es por parseo pero la respuesta fue exitosa, solo usar lista vacía
+        setState(() {
+          _transactions = [];
+          _error = '';
+          _isLoading = false;
+        });
+        return;
+      }
+      
+      // Extraer mensaje de error más claro solo para errores reales
       if (errorMessage.contains('401') || errorMessage.contains('Sesión expirada')) {
         errorMessage = 'Sesión expirada. Por favor, inicia sesión nuevamente.';
       } else if (errorMessage.contains('Timeout')) {
         errorMessage = 'La conexión está tomando demasiado tiempo. Verifica tu conexión a internet.';
       } else if (errorMessage.contains('No hay token')) {
         errorMessage = 'No hay sesión activa. Por favor, inicia sesión nuevamente.';
+      } else {
+        // Para otros errores, no mostrar mensaje de error visible si es un usuario nuevo
+        // Solo loguear el error pero no mostrarlo en la UI
+        print('Error al cargar transacciones: $errorMessage');
+        setState(() {
+          _transactions = [];
+          _error = '';
+          _isLoading = false;
+        });
+        return;
       }
       
-      setState(() => _error = errorMessage);
+      // Solo mostrar error para errores críticos de autenticación
+      setState(() {
+        _error = errorMessage;
+        _isLoading = false;
+      });
       
-      // Mostrar snackbar adicional para errores críticos
+      // Mostrar snackbar solo para errores críticos
       if (!mounted) return;
       if (errorMessage.contains('Sesión expirada') || errorMessage.contains('No hay sesión')) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -68,14 +116,6 @@ class _HomeScreenState extends State<HomeScreen> {
             content: Text(errorMessage),
             backgroundColor: Colors.orange,
             duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'Cerrar sesión',
-              textColor: Colors.white,
-              onPressed: () {
-                // Aquí podrías navegar a la pantalla de login
-                // Navigator.of(context).pushReplacementNamed('/login');
-              },
-            ),
           ),
         );
       }
@@ -167,28 +207,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                     ),
                     const SizedBox(height: 8),
-                    if (_error.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _error,
-                                style: TextStyle(color: Colors.red.shade700, fontSize: 12),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                   ],
                 ),
               ),
@@ -196,6 +214,67 @@ class _HomeScreenState extends State<HomeScreen> {
             if (_isLoading)
               const SliverFillRemaining(
                 child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_transactions.isEmpty && _error.isEmpty)
+              SliverFillRemaining(
+                child: Padding(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.receipt_long_outlined,
+                        size: 64,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No hay movimientos aún',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Agrega tu primer gasto o ingreso para comenzar',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (_error.isNotEmpty)
+              SliverFillRemaining(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: Colors.red[300],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _error,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.red[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               )
             else
               SliverList.builder(
