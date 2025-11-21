@@ -22,7 +22,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadTransactions();
+    // Limpiar estado completamente al inicializar
+    _transactions = [];
+    _isLoading = false;
+    _isDuoMode = false;
+    _error = '';
+    // Cargar transacciones después de un pequeño delay para asegurar que el token esté disponible
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        _loadTransactions();
+      }
+    });
   }
 
   Future<void> _loadTransactions() async {

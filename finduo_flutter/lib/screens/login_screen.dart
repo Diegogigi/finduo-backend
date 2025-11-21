@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'register_screen.dart';
-import 'home_screen.dart';
+import '../main.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final VoidCallback? onLoginSuccess;
+  
+  const LoginScreen({super.key, this.onLoginSuccess});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -40,9 +42,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      // Llamar al callback si existe
+      if (widget.onLoginSuccess != null) {
+        widget.onLoginSuccess!();
+      } else {
+        // Fallback: navegar directamente
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainNavigation()),
+          (route) => false,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
 

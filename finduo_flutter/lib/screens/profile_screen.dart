@@ -644,6 +644,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 await authService.logout();
                 if (!mounted) return;
                 
+                // Limpiar todo el stack de navegación y volver al LoginScreen
                 Navigator.of(context).pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
                   (route) => false,

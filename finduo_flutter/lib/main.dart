@@ -70,6 +70,11 @@ class _AuthWrapperState extends State<AuthWrapper> {
     });
   }
 
+  // Método para actualizar el estado cuando cambia la autenticación
+  void updateAuthState() {
+    _checkAuth();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -81,10 +86,16 @@ class _AuthWrapperState extends State<AuthWrapper> {
     }
 
     if (!_isAuthenticated) {
-      return const LoginScreen();
+      return LoginScreen(
+        onLoginSuccess: () {
+          // Cuando se inicia sesión exitosamente, actualizar el estado
+          _checkAuth();
+        },
+      );
     }
 
-    return const MainNavigation();
+    // Usar key para forzar recreación cuando cambia el usuario
+    return MainNavigation(key: ValueKey(_isAuthenticated));
   }
 }
 
